@@ -13,11 +13,20 @@ export class RecordManager {
   private recordStore: RecordStore | null = null
   private packedRecordInfoRecordId = -1
   private readonly packedRecordInfo = new Int8Array(96)
+  private packPrefix = ''
   private str = ''
+
+  setPackPrefix(prefix: string): void {
+    this.packPrefix = prefix
+  }
+
+  getPackPrefix(): string {
+    return this.packPrefix
+  }
 
   openRecordStoreForTrack(var1: number, var2: number): void {
     this.resetRecordsTime()
-    this.str = `${var1}${var2}`
+    this.str = `${this.packPrefix}${var1}${var2}`
     this.recordStore = RecordStore.openRecordStore(this.str, true)
     this.packedRecordInfoRecordId = -1
     const recordEnum = this.recordStore.enumerateRecords(null, null, false)
@@ -171,11 +180,78 @@ export class RecordManager {
     }
   }
 
-  deleteRecordStores(): void {
+  /**
+   * Returns the best achieved medal index (0=gold, 1=silver, 2=bronze) across all
+   * leagues for the given track in the active pack, or null if incomplete.
+   */
+  getTrackTopMedal(level: number, track: number): number | null {
+    const key = `${this.packPrefix}${level}${track}`
+    let store: RecordStore
+    try {
+      store = RecordStore.openRecordStore(key, false)
+    } catch {
+      return null
+    }
+
+    const recordEnum = store.enumerateRecords(null, null, false)
+    recordEnum.reset()
+    if (recordEnum.numRecords() <= 0) {
+      recordEnum.destroy()
+      return null
+    }
+
+    const data = recordEnum.nextRecord()
+    recordEnum.reset()
+    recordEnum.destroy()
+
+    if (data.length < RecordManager.LEAGUES_MAX * RecordManager.RECORD_NO_MAX * 5) {
+      return null
+    }
+
+    let bestPos: number | null = null
+    let offset = 0
+    for (let league = 0; league < RecordManager.LEAGUES_MAX; ++league) {
+      for (let pos = 0; pos < RecordManager.RECORD_NO_MAX; ++pos) {
+        const timeMs = this.load5BytesAsLong(data, offset)
+        offset += 5
+        if (timeMs > 0 && (bestPos === null || pos < bestPos)) {
+          bestPos = pos
+        }
+      }
+    }
+
+    return bestPos
+  }
+
+  countCompletedTracks(level: number, trackCount: number): number {
+    let completed = 0
+    for (let track = 0; track < trackCount; ++track) {
+      if (this.getTrackTopMedal(level, track) !== null) {
+        ++completed
+      }
+    }
+    return completed
+  }
+
+  deleteRecordStores(allPacks = false): void {
     const names = RecordStore.listRecordStores()
     for (const name of names) {
-      if (name !== 'GWTRStates') {
+      if (name === 'GWTRStates') {
+        continue
+      }
+      const shouldDelete = allPacks
+        ? true
+        : this.packPrefix === ''
+          ? /^\d+$/.test(name)
+          : name.startsWith(this.packPrefix)
+
+      if (shouldDelete) {
         RecordStore.deleteRecordStore(name)
+        if (name === this.str) {
+          this.recordStore = null
+          this.packedRecordInfoRecordId = -1
+          this.resetRecordsTime()
+        }
       }
     }
   }

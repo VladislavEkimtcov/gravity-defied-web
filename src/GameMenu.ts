@@ -5,6 +5,7 @@ import { Font } from './lcdui/Font.ts'
 import { FontStorage } from './lcdui/FontStorage.ts'
 import { Graphics } from './lcdui/Graphics.ts'
 import { GameCanvas } from './GameCanvas.ts'
+import { themeManager } from './ThemeManager.ts'
 
 export class GameMenu {
   private parentMenu: GameMenu | null
@@ -322,8 +323,13 @@ export class GameMenu {
   }
 
   render(graphics: Graphics): void {
+    const isDark = themeManager.isDark()
     if (this.isNameEntryMenu && this.strArr !== null) {
-      graphics.setColor(0, 0, 20)
+      if (isDark) {
+        graphics.setColor(160, 200, 255)
+      } else {
+        graphics.setColor(0, 0, 20)
+      }
       graphics.setFont(this.font)
       const var7 = 1
       graphics.drawString('Enter Name', this.xPos, var7, Graphics.LEFT | Graphics.TOP)
@@ -339,7 +345,11 @@ export class GameMenu {
       return
     }
 
-    graphics.setColor(0, 0, 0)
+    if (isDark) {
+      graphics.setColor(236, 240, 246)
+    } else {
+      graphics.setColor(0, 0, 0)
+    }
     let var2 = this.topPadding
     if (this.title !== '') {
       graphics.setFont(this.font)
@@ -361,7 +371,11 @@ export class GameMenu {
 
     for (let i = this.firstVisibleIndex; i < this.lastVisibleIndex + 1; ++i) {
       const var4 = this.vector[i]
-      graphics.setColor(0, 0, 0)
+      if (isDark) {
+        graphics.setColor(236, 240, 246)
+      } else {
+        graphics.setColor(0, 0, 0)
+      }
       var4.render(graphics, var2, this.contentX)
       if (i === this.selectedIndex && var4.isNotTextRender() && this.micro.gameCanvas !== null) {
         const var5 = this.xPos - Math.trunc(this.micro.gameCanvas.helmetSpriteWidth / 2)

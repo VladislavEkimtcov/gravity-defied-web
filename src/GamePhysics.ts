@@ -5,6 +5,7 @@ import { TimerOrMotoPartOrMenuElem } from './TimerOrMotoPartOrMenuElem.ts'
 import { class_10 } from './class_10.ts'
 import { abs, divideF16, multiplyF16 } from './cpp.ts'
 import { GameCanvas } from './GameCanvas.ts'
+import { themeManager } from './ThemeManager.ts'
 
 function max3(a: number, b: number, c: number): number {
   return Math.max(a, b, c)
@@ -925,7 +926,11 @@ export class GamePhysics {
   }
 
   private renderMotoFork(canvas: GameCanvas): void {
-    canvas.setColor(128, 128, 128)
+    if (themeManager.isDark()) {
+      canvas.setColor(165, 174, 184)
+    } else {
+      canvas.setColor(128, 128, 128)
+    }
     canvas.drawLineF16(this.motoComponents[3].xF16, this.motoComponents[3].yF16, this.motoComponents[1].xF16, this.motoComponents[1].yF16)
   }
 
@@ -947,10 +952,15 @@ export class GamePhysics {
   }
 
   private renderWheelSpokes(gameCanvas: GameCanvas): void {
+    const isDark = themeManager.isDark()
     const var2 = this.bikeParts[1].collisionRadiusF16
     const xxxF16 = multiplyF16(var2, 58982)
     const yyyF16 = multiplyF16(var2, 45875)
-    gameCanvas.setColor(0, 0, 0)
+    if (isDark) {
+      gameCanvas.setColor(205, 214, 224)
+    } else {
+      gameCanvas.setColor(0, 0, 0)
+    }
 
     if (Micro.isInGameMenu) {
       gameCanvas.drawCircle((this.motoComponents[1].xF16 << 2) >> 16, (this.motoComponents[1].yF16 << 2) >> 16, ((var2 + var2) << 2) >> 16)
@@ -994,9 +1004,16 @@ export class GamePhysics {
     }
 
     if (GamePhysics.curentMotoLeague > 0) {
-      gameCanvas.setColor(255, 0, 0)
       if (GamePhysics.curentMotoLeague > 2) {
-        gameCanvas.setColor(100, 100, 255)
+        if (isDark) {
+          gameCanvas.setColor(120, 165, 255)
+        } else {
+          gameCanvas.setColor(100, 100, 255)
+        }
+      } else if (isDark) {
+        gameCanvas.setColor(255, 95, 95)
+      } else {
+        gameCanvas.setColor(255, 0, 0)
       }
       gameCanvas.drawCircle((this.motoComponents[2].xF16 << 2) >> 16, (this.motoComponents[2].yF16 << 2) >> 16, 4)
       gameCanvas.drawCircle((this.motoComponents[1].xF16 << 2) >> 16, (this.motoComponents[1].yF16 << 2) >> 16, 4)
@@ -1102,6 +1119,7 @@ export class GamePhysics {
       }
     }
 
+    const isDark = themeManager.isDark()
     const var26 = multiplyF16(this.riderPoseBlendTable[var6][0], 65536 - var7) + multiplyF16(this.riderPoseBlendTable[var6 + 1][0], var7)
     if (this.isRenderDriverWithSprites) {
       gameCanvas.renderBodyPart(xF16 << 2, yF16 << 2, x2F16 << 2, y2F16 << 2, 1)
@@ -1114,19 +1132,35 @@ export class GamePhysics {
       }
       gameCanvas.drawHelmet((circleXF16 << 2) >> 16, (circleYF16 << 2) >> 16, var30)
     } else {
-      gameCanvas.setColor(0, 0, 0)
+      if (isDark) {
+        gameCanvas.setColor(220, 226, 234)
+      } else {
+        gameCanvas.setColor(0, 0, 0)
+      }
       gameCanvas.drawLineF16(xF16, yF16, x2F16, y2F16)
       gameCanvas.drawLineF16(x2F16, y2F16, x3F16, y3F16)
-      gameCanvas.setColor(0, 0, 128)
+      if (isDark) {
+        gameCanvas.setColor(110, 165, 255)
+      } else {
+        gameCanvas.setColor(0, 0, 128)
+      }
       gameCanvas.drawLineF16(x3F16, y3F16, x4F16, y4F16)
       gameCanvas.drawLineF16(x4F16, y4F16, x5F16, y5F16)
       gameCanvas.drawLineF16(x5F16, y5F16, x6F16, y6F16)
       const var30 = 65536
-      gameCanvas.setColor(156, 0, 0)
+      if (isDark) {
+        gameCanvas.setColor(255, 100, 100)
+      } else {
+        gameCanvas.setColor(156, 0, 0)
+      }
       gameCanvas.drawCircle((circleXF16 << 2) >> 16, (circleYF16 << 2) >> 16, ((var30 + var30) << 2) >> 16)
     }
 
-    gameCanvas.setColor(0, 0, 0)
+    if (isDark) {
+      gameCanvas.setColor(220, 226, 234)
+    } else {
+      gameCanvas.setColor(0, 0, 0)
+    }
     gameCanvas.drawForthSpriteByCenter((x6F16 << 2) >> 16, (y6F16 << 2) >> 16)
     gameCanvas.drawForthSpriteByCenter((var14 << 2) >> 16, (var15 << 2) >> 16)
   }
@@ -1162,7 +1196,11 @@ export class GamePhysics {
     const var34 = var32 + multiplyF16(var5, 32768)
     const var35 = var31 + multiplyF16(var4, 114688) - multiplyF16(var2, 32768)
     const var36 = var32 + multiplyF16(var5, 114688) - multiplyF16(var3, 32768)
-    gameCanvas.setColor(50, 50, 50)
+    if (themeManager.isDark()) {
+      gameCanvas.setColor(195, 204, 214)
+    } else {
+      gameCanvas.setColor(50, 50, 50)
+    }
     gameCanvas.drawCircle((var21 << 2) >> 16, (var22 << 2) >> 16, ((32768 + 32768) << 2) >> 16)
     if (!this.isCrashed) {
       gameCanvas.drawLineF16(var9, var10, var17, var18)
@@ -1220,7 +1258,13 @@ export class GamePhysics {
 
     this.renderWheelSpokes(gameCanvas)
     if (this.isRenderMotoWithSprites) {
-      gameCanvas.setColor(170, 0, 0)
+      if (themeManager.isDark()) {
+        gameCanvas.setColor(225, 75, 75)
+      } else {
+        gameCanvas.setColor(170, 0, 0)
+      }
+    } else if (themeManager.isDark()) {
+      gameCanvas.setColor(195, 204, 214)
     } else {
       gameCanvas.setColor(50, 50, 50)
     }

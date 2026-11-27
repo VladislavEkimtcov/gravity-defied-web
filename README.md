@@ -2,9 +2,32 @@
 
 **Gravity Defied** is a legendary mototrial racing mobile game. It was originally developed by Codebrew Software in 2004 for J2ME platform.
 
-This is a web browser port of Gravity Defied, written in TypeScript using Vite as the build tool. The project includes all the features of the original game and runs directly in modern web browsers.
+This fork extends the TypeScript/Canvas browser port with **Dark Mode**, a **Native Level Loader** (supporting disk `.mrg` files), an **Alternative 100%-Inspired Pro Career**, and an **Incomplete (`?`) & Top Medal Track System** (all tracks, levels, and bikes playable from the start).
 
-🎮 **Play online:**  
+## Showcase
+
+| Dark Mode (`Options`) | Native Level Loader |
+|---|---|
+| ![Dark Mode in native Options menu](docs/screenshots/01-dark-mode-options.png) | ![Native Level Loader menu](docs/screenshots/02-level-loader.png) |
+
+| Incomplete (`?`) & Top Medals | 100% Pro Career (`Pro` Tracks) |
+|---|---|
+| ![Track list with ? incomplete and top medal icons](docs/screenshots/05-track-medals.png) | ![100% Pro Career tracks](docs/screenshots/03-pro-tracks-incomplete.png) |
+
+| `100% Redux` Gameplay (Dark Mode) |
+|---|
+| ![100% Redux gameplay in Dark Mode](docs/screenshots/04-gameplay-dark-100-redux.png) |
+
+## What's New in This Fork
+
+- **Dark Mode (`Options > Dark mode`)**: `Auto` (follows system `prefers-color-scheme`), `On`, or `Off`, theming the canvas renderer, dimmed menu backdrop, HUD, page shell, and touch controls without FOUC.
+- **Native Level Loader (`Play Menu / Options > Load levels`)**: Switch between **Original Career**, **100% Pro Career**, or load/reload custom `.mrg` track archives directly from disk.
+- **100% Pro Career (`src/assets/alt-career.mrg`)**: 30 new `100%`-inspired technical trials tracks across Easy, Medium, and Pro tiers (`100% Redux`, `Skyline 100`, `200% Finale`, etc.), physics-verified across `GamePhysics`.
+- **No Track Locks (`?` & Top Medals)**: All levels, tracks, and leagues (`100cc`–`325cc`) are unlocked from the start. Incomplete tracks display `?`; completed tracks display your top earned medal (Gold, Silver, or Bronze).
+
+---
+
+🎮 **Original online version:**  
 https://yurkagon.github.io/gravity-defied-web/
 
 ![Preview](preview.gif)

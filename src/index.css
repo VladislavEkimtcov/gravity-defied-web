@@ -1,12 +1,111 @@
 :root {
-  color: #0f0e09;
+  color-scheme: light dark;
+
+  --page-text-light: #0f0e09;
+  --page-text-dark: #e8ecf2;
+
+  --page-bg-stop-1-light: #f1d78d;
+  --page-bg-stop-2-light: #e1c26e;
+  --page-bg-stop-3-light: #ae8e49;
+  --page-bg-stop-4-light: #5b4623;
+
+  --page-bg-stop-1-dark: #25221c;
+  --page-bg-stop-2-dark: #1c2026;
+  --page-bg-stop-3-dark: #14171d;
+  --page-bg-stop-4-dark: #0b0d11;
+
+  --canvas-bg-light: #ffffff;
+  --canvas-bg-dark: #12151a;
+
+  --error-text-light: #fff6dc;
+  --error-text-dark: #edf2f8;
+  --error-bg-light: rgba(31, 16, 7, 0.88);
+  --error-bg-dark: rgba(18, 21, 26, 0.94);
+  --error-border-light: rgba(255, 235, 183, 0.65);
+  --error-border-dark: rgba(205, 215, 225, 0.35);
+  --error-shadow-light: rgba(0, 0, 0, 0.28);
+  --error-shadow-dark: rgba(0, 0, 0, 0.56);
+
+  --touch-border-light: rgba(15, 14, 9, 0.4);
+  --touch-border-dark: rgba(235, 240, 246, 0.35);
+  --touch-color-light: rgba(15, 14, 9, 0.75);
+  --touch-color-dark: rgba(235, 240, 246, 0.85);
+  --touch-bg-light: rgba(255, 255, 255, 0.45);
+  --touch-bg-dark: rgba(24, 28, 36, 0.65);
+  --touch-pressed-bg-light: rgba(225, 194, 110, 0.75);
+  --touch-pressed-bg-dark: rgba(78, 90, 110, 0.82);
+
+  --page-text: var(--page-text-light);
+  --page-bg-stop-1: var(--page-bg-stop-1-light);
+  --page-bg-stop-2: var(--page-bg-stop-2-light);
+  --page-bg-stop-3: var(--page-bg-stop-3-light);
+  --page-bg-stop-4: var(--page-bg-stop-4-light);
+  --canvas-bg: var(--canvas-bg-light);
+  --error-text: var(--error-text-light);
+  --error-bg: var(--error-bg-light);
+  --error-border: var(--error-border-light);
+  --error-shadow: var(--error-shadow-light);
+  --touch-border: var(--touch-border-light);
+  --touch-color: var(--touch-color-light);
+  --touch-bg: var(--touch-bg-light);
+  --touch-pressed-bg: var(--touch-pressed-bg-light);
+
+  @media (prefers-color-scheme: dark) {
+    --page-text: var(--page-text-dark);
+    --page-bg-stop-1: var(--page-bg-stop-1-dark);
+    --page-bg-stop-2: var(--page-bg-stop-2-dark);
+    --page-bg-stop-3: var(--page-bg-stop-3-dark);
+    --page-bg-stop-4: var(--page-bg-stop-4-dark);
+    --canvas-bg: var(--canvas-bg-dark);
+    --error-text: var(--error-text-dark);
+    --error-bg: var(--error-bg-dark);
+    --error-border: var(--error-border-dark);
+    --error-shadow: var(--error-shadow-dark);
+    --touch-border: var(--touch-border-dark);
+    --touch-color: var(--touch-color-dark);
+    --touch-bg: var(--touch-bg-dark);
+    --touch-pressed-bg: var(--touch-pressed-bg-dark);
+  }
+
+  @supports (color: light-dark(white, black)) {
+    --page-text: light-dark(var(--page-text-light), var(--page-text-dark));
+    --page-bg-stop-1: light-dark(var(--page-bg-stop-1-light), var(--page-bg-stop-1-dark));
+    --page-bg-stop-2: light-dark(var(--page-bg-stop-2-light), var(--page-bg-stop-2-dark));
+    --page-bg-stop-3: light-dark(var(--page-bg-stop-3-light), var(--page-bg-stop-3-dark));
+    --page-bg-stop-4: light-dark(var(--page-bg-stop-4-light), var(--page-bg-stop-4-dark));
+    --canvas-bg: light-dark(var(--canvas-bg-light), var(--canvas-bg-dark));
+    --error-text: light-dark(var(--error-text-light), var(--error-text-dark));
+    --error-bg: light-dark(var(--error-bg-light), var(--error-bg-dark));
+    --error-border: light-dark(var(--error-border-light), var(--error-border-dark));
+    --error-shadow: light-dark(var(--error-shadow-light), var(--error-shadow-dark));
+    --touch-border: light-dark(var(--touch-border-light), var(--touch-border-dark));
+    --touch-color: light-dark(var(--touch-color-light), var(--touch-color-dark));
+    --touch-bg: light-dark(var(--touch-bg-light), var(--touch-bg-dark));
+    --touch-pressed-bg: light-dark(var(--touch-pressed-bg-light), var(--touch-pressed-bg-dark));
+  }
+
+  color: var(--page-text);
   background:
-    radial-gradient(circle at top, #f1d78d 0%, #e1c26e 22%, #ae8e49 54%, #5b4623 100%);
+    radial-gradient(
+      circle at top,
+      var(--page-bg-stop-1) 0%,
+      var(--page-bg-stop-2) 22%,
+      var(--page-bg-stop-3) 54%,
+      var(--page-bg-stop-4) 100%
+    );
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
 }
 
 * {
@@ -46,7 +145,7 @@ body {
   max-height: none;
   display: block;
   image-rendering: pixelated;
-  background: #ffffff;
+  background: var(--canvas-bg);
   touch-action: none;
 }
 
@@ -54,10 +153,10 @@ body {
   width: min(100%, 760px);
   padding: 20px 24px;
   white-space: pre-wrap;
-  color: #fff6dc;
-  background: rgba(31, 16, 7, 0.88);
-  border: 2px solid rgba(255, 235, 183, 0.65);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  color: var(--error-text);
+  background: var(--error-bg);
+  border: 2px solid var(--error-border);
+  box-shadow: 0 18px 48px var(--error-shadow);
 }
 
 .touch-controls {
@@ -78,10 +177,10 @@ body {
   width: 64px;
   height: 64px;
   padding: 0;
-  border: 2px solid rgba(15, 14, 9, 0.4);
+  border: 2px solid var(--touch-border);
   border-radius: 32px;
-  color: rgba(15, 14, 9, 0.75);
-  background: rgba(255, 255, 255, 0.45);
+  color: var(--touch-color);
+  background: var(--touch-bg);
   font: inherit;
   font-weight: bold;
   touch-action: none;
@@ -92,7 +191,7 @@ body {
 }
 
 .touch-controls .pressed {
-  background: rgba(225, 194, 110, 0.75);
+  background: var(--touch-pressed-bg);
 }
 
 .touch-left::before,

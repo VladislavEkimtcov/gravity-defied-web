@@ -2,6 +2,7 @@ import { abs, divideF16, multiplyF16 } from './cpp.ts'
 import { GameCanvas } from './GameCanvas.ts'
 import { GamePhysics } from './GamePhysics.ts'
 import { LevelLoader } from './LevelLoader.ts'
+import { themeManager } from './ThemeManager.ts'
 import { FileStream } from './utils/FileStream.ts'
 
 export class GameLevel {
@@ -102,7 +103,16 @@ export class GameLevel {
       this.shadowBlendF16 = multiplyF16(this.shadowBlendF16, 49152) + multiplyF16(var4, 16384)
       if (this.shadowBlendF16 <= 557056) {
         const var5 = (multiplyF16(1638400, this.shadowBlendF16) >> 16)
-        gameCanvas.setColor(var5, var5, var5)
+        if (themeManager.isDark()) {
+          const t = Math.min(1, Math.max(0, var5 / 212))
+          gameCanvas.setColor(
+            Math.round(4 + (18 - 4) * t),
+            Math.round(6 + (21 - 6) * t),
+            Math.round(8 + (26 - 8) * t),
+          )
+        } else {
+          gameCanvas.setColor(var5, var5, var5)
+        }
 
         let var6 = this.pointPositions[var2][0] - this.pointPositions[var2 + 1][0]
         let var8 = divideF16(this.pointPositions[var2][1] - this.pointPositions[var2 + 1][1], var6)
@@ -145,6 +155,22 @@ export class GameLevel {
     }
   }
 
+  private setLevel3DColor(gameCanvas: GameCanvas): void {
+    if (themeManager.isDark()) {
+      gameCanvas.setColor(32, 165, 82)
+    } else {
+      gameCanvas.setColor(0, 170, 0)
+    }
+  }
+
+  private setTrackNearestColor(gameCanvas: GameCanvas): void {
+    if (themeManager.isDark()) {
+      gameCanvas.setColor(68, 235, 118)
+    } else {
+      gameCanvas.setColor(0, 255, 0)
+    }
+  }
+
   renderLevel3D(gameCanvas: GameCanvas, xF16: number, yF16: number): void {
     let var7 = 0
     let var8 = 0
@@ -161,7 +187,7 @@ export class GameLevel {
     let var11 = GamePhysics.getSmthLikeMaxAbs(var9, var10)
     var9 = divideF16(var9, var11 >> 1 >> 1)
     var10 = divideF16(var10, var11 >> 1 >> 1)
-    gameCanvas.setColor(0, 170, 0)
+    this.setLevel3DColor(gameCanvas)
 
     while (lineNo < this.pointsCount - 1) {
       const var4 = var9
@@ -201,7 +227,7 @@ export class GameLevel {
           ((this.pointPositions[this.startFlagPoint][0] + var4) << 3) >> 16,
           ((this.pointPositions[this.startFlagPoint][1] + var5) << 3) >> 16,
         )
-        gameCanvas.setColor(0, 170, 0)
+        this.setLevel3DColor(gameCanvas)
       }
 
       if (this.finishFlagPoint === lineNo) {
@@ -209,7 +235,7 @@ export class GameLevel {
           ((this.pointPositions[this.finishFlagPoint][0] + var4) << 3) >> 16,
           ((this.pointPositions[this.finishFlagPoint][1] + var5) << 3) >> 16,
         )
-        gameCanvas.setColor(0, 170, 0)
+        this.setLevel3DColor(gameCanvas)
       }
 
       if (this.pointPositions[lineNo][0] > this.maxX) {
@@ -240,6 +266,8 @@ export class GameLevel {
       --pointNo
     }
 
+    this.setTrackNearestColor(gameCanvas)
+
     while (pointNo < this.pointsCount - 1) {
       gameCanvas.drawLine(
         (this.pointPositions[pointNo][0] << 3) >> 16,
@@ -253,7 +281,7 @@ export class GameLevel {
           (this.pointPositions[this.startFlagPoint][0] << 3) >> 16,
           (this.pointPositions[this.startFlagPoint][1] << 3) >> 16,
         )
-        gameCanvas.setColor(0, 255, 0)
+        this.setTrackNearestColor(gameCanvas)
       }
 
       if (this.finishFlagPoint === pointNo) {
@@ -261,7 +289,7 @@ export class GameLevel {
           (this.pointPositions[this.finishFlagPoint][0] << 3) >> 16,
           (this.pointPositions[this.finishFlagPoint][1] << 3) >> 16,
         )
-        gameCanvas.setColor(0, 255, 0)
+        this.setTrackNearestColor(gameCanvas)
       }
 
       if (this.pointPositions[pointNo][0] > this.maxX) {

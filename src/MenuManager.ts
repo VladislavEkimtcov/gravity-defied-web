@@ -5,8 +5,9 @@ import type { IMenuManager } from './IMenuManager.ts'
 import { LevelLoader } from './LevelLoader.ts'
 import { Micro } from './Micro.ts'
 import { RecordManager } from './RecordManager.ts'
-import { SettingsStringRender } from './SettingsStringRender.ts'
+import { SettingsStringRender, type TrackBadge } from './SettingsStringRender.ts'
 import { TextRender } from './TextRender.ts'
+import { ThemeManager, themeManager } from './ThemeManager.ts'
 import { TimerOrMotoPartOrMenuElem } from './TimerOrMotoPartOrMenuElem.ts'
 import { Font } from './lcdui/Font.ts'
 import { FontStorage } from './lcdui/FontStorage.ts'
@@ -14,7 +15,14 @@ import { Graphics } from './lcdui/Graphics.ts'
 import { Image } from './lcdui/Image.ts'
 import { RecordStore } from './rms/RecordStore.ts'
 import { Time } from './utils/Time.ts'
+import ALT_CAREER_MRG_URL from './assets/alt-career.mrg?url'
+import LEVELS_MRG_URL from './assets/levels.mrg?url'
 import RASTER_URL from './assets/raster.png?url'
+
+type OpenFilePickerFn = (options?: {
+  multiple?: boolean
+  types?: Array<{ description?: string; accept: Record<string, string[]> }>
+}) => Promise<FileSystemFileHandle[]>
 
 export class MenuManager implements IMenuManager {
   private readonly persistedStateBuffer = new Int8Array(19)
@@ -48,6 +56,18 @@ export class MenuManager implements IMenuManager {
   private inputSetting: SettingsStringRender | null = null
   private lookAheadSetting: SettingsStringRender | null = null
   private zoomSetting: SettingsStringRender | null = null
+  private darkModeSetting: SettingsStringRender | null = null
+  private loadLevelsPlayItem: TimerOrMotoPartOrMenuElem | null = null
+  private loadLevelsOptionsItem: TimerOrMotoPartOrMenuElem | null = null
+  private gameMenuLevelLoader: GameMenu | null = null
+  private loadDiskFileAction: SettingsStringRender | null = null
+  private reloadDiskFileAction: SettingsStringRender | null = null
+  private loadOriginalCareerAction: SettingsStringRender | null = null
+  private loadAltCareerAction: SettingsStringRender | null = null
+  private activePackLabel = 'Original'
+  private loadedFileHandle: FileSystemFileHandle | null = null
+  private fileInputElement: HTMLInputElement | null = null
+  private onLevelPackChanged: (() => void) | null = null
   private clearHighscoreSetting: TimerOrMotoPartOrMenuElem | null = null
   private fullResetItem: TimerOrMotoPartOrMenuElem | null = null
   private confirmYes: SettingsStringRender | null = null
@@ -184,25 +204,20 @@ export class MenuManager implements IMenuManager {
           }
         }
 
-        if (this.playerNameBytes[0] === 82 && this.playerNameBytes[1] === 75 && this.playerNameBytes[2] === 69) {
-          this.availableLeagues = 3
-          this.maxAvailableLevel = 2
-          if (this.micro.levelLoader !== null) {
-            this.unlockedTracksByLevel[0] = this.micro.levelLoader.levelNames[0].length - 1
-            this.unlockedTracksByLevel[1] = this.micro.levelLoader.levelNames[1].length - 1
-            this.unlockedTracksByLevel[2] = this.micro.levelLoader.levelNames[2].length - 1
-          }
-          return
+        this.availableLeagues = 3
+        this.maxAvailableLevel = 2
+        if (this.micro.levelLoader !== null) {
+          this.unlockedTracksByLevel[0] = Math.max(0, this.micro.levelLoader.levelNames[0].length - 1)
+          this.unlockedTracksByLevel[1] = Math.max(0, this.micro.levelLoader.levelNames[1].length - 1)
+          this.unlockedTracksByLevel[2] = Math.max(0, this.micro.levelLoader.levelNames[2].length - 1)
+        } else {
+          this.unlockedTracksByLevel[0] = 0
+          this.unlockedTracksByLevel[1] = 0
+          this.unlockedTracksByLevel[2] = 0
         }
-
-        this.availableLeagues = 0
-        this.maxAvailableLevel = 1
-        this.unlockedTracksByLevel[0] = 0
-        this.unlockedTracksByLevel[1] = 0
-        this.unlockedTracksByLevel[2] = -1
         return
       }
-      case 3:
+      case 3: {
         this.isDisablePerspective = this.readStoredValue(0, this.isDisablePerspective)
         this.isDisabledShadows = this.readStoredValue(1, this.isDisabledShadows)
         this.isDisabledDriverSprite = this.readStoredValue(2, this.isDisabledDriverSprite)
@@ -214,14 +229,25 @@ export class MenuManager implements IMenuManager {
         this.selectedLevelIndex = this.readStoredValue(10, this.selectedLevelIndex)
         this.selectedLeagueIndex = this.readStoredValue(12, this.selectedLeagueIndex)
         this.reservedSetting15 = this.readStoredValue(15, this.reservedSetting15)
+
+        if (this.selectedLevelIndex < 0 || this.selectedLevelIndex > 2) {
+          this.selectedLevelIndex = 0
+        }
+        const levelTrackCount = this.micro.levelLoader?.getTrackCount(this.selectedLevelIndex) ?? 0
+        if (this.selectedTrackIndex < 0 || (levelTrackCount > 0 && this.selectedTrackIndex >= levelTrackCount)) {
+          this.selectedTrackIndex = 0
+        }
+        if (this.selectedLeagueIndex < 0 || this.selectedLeagueIndex > 3) {
+          this.selectedLeagueIndex = 0
+        }
         this.resumeLevelIndex = this.selectedLevelIndex
         this.resumeTrackIndex = this.selectedTrackIndex
 
-        if (this.playerNameBytes[0] !== 82 || this.playerNameBytes[1] !== 75 || this.playerNameBytes[2] !== 69) {
-          this.availableLeagues = this.readStoredValue(5, this.availableLeagues)
-          this.maxAvailableLevel = this.readStoredValue(6, this.maxAvailableLevel)
+        this.availableLeagues = 3
+        this.maxAvailableLevel = 2
+        if (this.micro.levelLoader !== null) {
           for (var4 = 0; var4 < 3; ++var4) {
-            this.unlockedTracksByLevel[var4] = this.readStoredValue(7 + var4, this.unlockedTracksByLevel[var4])
+            this.unlockedTracksByLevel[var4] = Math.max(0, this.micro.levelLoader.levelNames[var4].length - 1)
           }
         }
 
@@ -244,14 +270,11 @@ export class MenuManager implements IMenuManager {
         }
         this.leagueNamesAll4 = ['100cc', '175cc', '220cc', '325cc']
         this.levelNames = this.micro.levelLoader?.levelNames ?? []
-        if (this.availableLeagues < 3) {
-          this.leagueNames = ['100cc', '175cc', '220cc']
-        } else {
-          this.leagueNames = this.leagueNamesAll4
-        }
+        this.leagueNames = this.leagueNamesAll4
 
         this.highscoreLeagueIndex = this.selectedLeagueIndex
         return
+      }
       case 4: {
         this.gameMenuMain = new GameMenu('Main', this.micro, null)
         this.gameMenuPlay = new GameMenu('Play', this.micro, this.gameMenuMain)
@@ -302,14 +325,24 @@ export class MenuManager implements IMenuManager {
 
         this.settingStringLevel.setAvailableOptions(this.maxAvailableLevel)
         this.settingsStringLeague.setAvailableOptions(this.availableLeagues)
+        this.refreshTrackBadges()
         this.gameTimerTaskHighscore = new TimerOrMotoPartOrMenuElem('Highscore', this.gameMenuHighscore, this)
         this.gameMenuHighscore?.addMenuElement(this.settingStringBack!)
+        this.gameMenuLevelLoader = new GameMenu('Load levels', this.micro, this.gameMenuPlay)
+        this.loadLevelsPlayItem = new TimerOrMotoPartOrMenuElem('Load levels', this.gameMenuLevelLoader, this)
+        this.loadLevelsOptionsItem = new TimerOrMotoPartOrMenuElem('Load levels', this.gameMenuLevelLoader, this)
+        this.loadDiskFileAction = new SettingsStringRender('Load .mrg file>', 0, this, [], false, this.micro, this.gameMenuLevelLoader, true)
+        this.reloadDiskFileAction = new SettingsStringRender('Reload file>', 0, this, [], false, this.micro, this.gameMenuLevelLoader, true)
+        this.loadOriginalCareerAction = new SettingsStringRender('Original Career>', 0, this, [], false, this.micro, this.gameMenuLevelLoader, true)
+        this.loadAltCareerAction = new SettingsStringRender('100% Pro Career>', 0, this, [], false, this.micro, this.gameMenuLevelLoader, true)
+        this.rebuildLevelLoaderMenu()
         this.taskStart = new SettingsStringRender('Start>', 0, this, [], false, this.micro, this.gameMenuMain, true)
         this.gameMenuPlay?.addMenuElement(this.taskStart)
         this.gameMenuPlay?.addMenuElement(this.settingStringLevel)
         this.gameMenuPlay?.addMenuElement(this.settingsStringTrack)
         this.gameMenuPlay?.addMenuElement(this.settingsStringLeague)
         this.gameMenuPlay?.addMenuElement(this.gameTimerTaskHighscore)
+        this.gameMenuPlay?.addMenuElement(this.loadLevelsPlayItem)
         this.gameMenuPlay?.addMenuElement(this.settingStringGoToMain!)
 
         this.perspectiveSetting = new SettingsStringRender('Perspective', this.isDisablePerspective, this, this.toggleOptionNames, true, this.micro, this.gameMenuOptions, false)
@@ -319,6 +352,7 @@ export class MenuManager implements IMenuManager {
         this.inputSetting = new SettingsStringRender('Input', this.inputMode, this, this.inputModeNames, false, this.micro, this.gameMenuOptions, false)
         this.lookAheadSetting = new SettingsStringRender('Look ahead', this.isDisableLookAhead, this, this.toggleOptionNames, true, this.micro, this.gameMenuOptions, false)
         this.zoomSetting = new SettingsStringRender('Zoom', this.zoomIndex, this, this.zoomNames, false, this.micro, this.gameMenuOptions, false)
+        this.darkModeSetting = new SettingsStringRender('Dark mode', themeManager.getModeIndex(), this, ThemeManager.LABELS, false, this.micro, this.gameMenuOptions, false)
         this.clearHighscoreSetting = new TimerOrMotoPartOrMenuElem('Clear highscore', this.gameMenuConfirmClear, this)
         return
       case 6:
@@ -329,17 +363,19 @@ export class MenuManager implements IMenuManager {
         this.gameMenuOptions?.addMenuElement(this.inputSetting!)
         this.gameMenuOptions?.addMenuElement(this.lookAheadSetting!)
         this.gameMenuOptions?.addMenuElement(this.zoomSetting!)
+        this.gameMenuOptions?.addMenuElement(this.darkModeSetting!)
+        this.gameMenuOptions?.addMenuElement(this.loadLevelsOptionsItem!)
         this.gameMenuOptions?.addMenuElement(this.clearHighscoreSetting!)
         this.gameMenuOptions?.addMenuElement(this.settingStringBack!)
         this.confirmNo = new SettingsStringRender('No', 0, this, [], false, this.micro, this.gameMenuMain, true)
         this.confirmYes = new SettingsStringRender('Yes', 0, this, [], false, this.micro, this.gameMenuMain, true)
         this.fullResetItem = new TimerOrMotoPartOrMenuElem('Full Reset', this.gameMenuConfirmReset, this)
-        this.addTextRender(this.gameMenuConfirmClear!, 'Clearing the highscores can not be undone. It will remove all the registered times on all tracks.')
+        this.addTextRender(this.gameMenuConfirmClear!, 'Clearing the highscores can not be undone. It will remove all the registered times and medals in the active career.')
         this.addTextRender(this.gameMenuConfirmClear!, 'Would you like to clear the highscores?')
         this.gameMenuConfirmClear?.addMenuElement(this.confirmNo)
         this.gameMenuConfirmClear?.addMenuElement(this.confirmYes)
         this.gameMenuConfirmClear?.addMenuElement(this.fullResetItem)
-        this.addTextRender(this.gameMenuConfirmReset!, 'A full reset can not be undone. It will relock all tracks and leagues and clear back all settings to default. A full reset will exit the application.')
+        this.addTextRender(this.gameMenuConfirmReset!, 'A full reset can not be undone. It will clear all highscores, medals and settings back to default.')
         this.addTextRender(this.gameMenuConfirmReset!, 'Would you like to do a full reset?')
         this.gameMenuConfirmReset?.addMenuElement(this.confirmNo)
         this.gameMenuConfirmReset?.addMenuElement(this.confirmYes)
@@ -360,9 +396,9 @@ export class MenuManager implements IMenuManager {
         this.addTextRender(this.keysMenu, '3 accelerates, 6 brakes, 5 leans forward and 4 leans backward.')
         this.keysMenu.addMenuElement(this.settingStringBack!)
         this.gameMenuHelp?.addMenuElement(this.keysItem)
-        this.unlockingMenu = new GameMenu('Unlocking', this.micro, this.gameMenuHelp)
-        this.unlockingItem = new TimerOrMotoPartOrMenuElem('Unlocking', this.unlockingMenu, this)
-        this.addTextRender(this.unlockingMenu, 'By completing the easier levels, new levels will be unlocked. You will also gain access to higher leagues where more advanced bikes with different characteristics are available.')
+        this.unlockingMenu = new GameMenu('Tracks & Medals', this.micro, this.gameMenuHelp)
+        this.unlockingItem = new TimerOrMotoPartOrMenuElem('Tracks & Medals', this.unlockingMenu, this)
+        this.addTextRender(this.unlockingMenu, 'All levels, tracks and bikes are open to ride from the start. Incomplete tracks show a ? mark. Finish a track to earn and display your top medal (Gold, Silver or Bronze).')
         this.unlockingMenu.addMenuElement(this.settingStringBack!)
         this.gameMenuHelp?.addMenuElement(this.unlockingItem)
         this.gameMenuOptionsHighscoreDescription = new GameMenu('Highscore', this.micro, this.gameMenuHelp)
@@ -394,6 +430,12 @@ export class MenuManager implements IMenuManager {
         this.gameMenuOptions2.addMenuElement(this.spacerTextRender)
         this.addTextRender(this.gameMenuOptions2, 'Zoom: 1x,2x,3x,4x')
         this.addTextRender(this.gameMenuOptions2, 'Default: <1x>. Enlarges the game graphics.')
+        this.gameMenuOptions2.addMenuElement(this.spacerTextRender)
+        this.addTextRender(this.gameMenuOptions2, 'Dark mode: Auto/On/Off')
+        this.addTextRender(this.gameMenuOptions2, 'Default: <Auto>. Follows system theme or forces dark/light mode.')
+        this.gameMenuOptions2.addMenuElement(this.spacerTextRender)
+        this.addTextRender(this.gameMenuOptions2, 'Load levels')
+        this.addTextRender(this.gameMenuOptions2, 'Switch between Original, 100% Pro Career, or load/reload custom .mrg track files from disk.')
         this.gameMenuOptions2.addMenuElement(this.spacerTextRender)
         this.addTextRender(this.gameMenuOptions2, 'Clear highscore')
         this.addTextRender(this.gameMenuOptions2, 'Lets you clear the highscores. Here you can also do a "Full Reset" which will reset the game to original state (clear settings, highscores, unlocked levels and leagues).')
@@ -472,84 +514,37 @@ export class MenuManager implements IMenuManager {
     }
 
     this.recordManager.closeRecordStore()
-    let unlockedLeague = -1
-    if (this.settingsStringTrack.getMaxAvailableOptionPos() >= this.settingsStringTrack.getCurrentOptionPos()) {
-      this.settingsStringTrack.setAvailableOptions(
-        this.settingsStringTrack.getCurrentOptionPos() + 1 < this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()]
-          ? this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()]
-          : this.settingsStringTrack.getCurrentOptionPos() + 1,
-      )
-      this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()] =
-        this.settingsStringTrack.getMaxAvailableOptionPos() < this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()]
-          ? this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()]
-          : this.settingsStringTrack.getMaxAvailableOptionPos()
-    }
+    this.refreshTrackBadges()
 
-    if (this.settingsStringTrack.getCurrentOptionPos() === this.settingsStringTrack.getMaxOptionPos()) {
+    const currentLevel = this.settingStringLevel.getCurrentOptionPos()
+    const currentTrack = this.settingsStringTrack.getCurrentOptionPos()
+    const trackCount = this.levelNames[currentLevel]?.length ?? 0
+    if (currentTrack >= trackCount - 1) {
       this.completedLastTrack = true
-      switch (this.settingStringLevel.getCurrentOptionPos()) {
-        case 0:
-          if (this.settingsStringLeague.getMaxAvailableOptionPos() < 1) {
-            unlockedLeague = 1
-            this.settingsStringLeague.setAvailableOptions(unlockedLeague)
-          }
-          break
-        case 1:
-          if (this.settingsStringLeague.getMaxAvailableOptionPos() < 2) {
-            unlockedLeague = 2
-            this.settingsStringLeague.setAvailableOptions(unlockedLeague)
-          }
-          break
-        case 2:
-          if (this.settingsStringLeague.getMaxAvailableOptionPos() < 3) {
-            unlockedLeague = 3
-            this.settingsStringLeague.setOptionsList(this.leagueNamesAll4)
-            this.leagueNames = this.leagueNamesAll4
-            this.settingsStringLeague.setAvailableOptions(unlockedLeague)
-          }
-      }
-
-      this.settingStringLevel.setAvailableOptions(this.settingStringLevel.getMaxAvailableOptionPos() + 1)
-      if (this.unlockedTracksByLevel[this.settingStringLevel.getMaxAvailableOptionPos()] === -1) {
-        this.unlockedTracksByLevel[this.settingStringLevel.getMaxAvailableOptionPos()] = 0
-      }
     }
 
-    const var3 = this.getCountOfRecordStoresWithPrefix(this.settingStringLevel.getCurrentOptionPos())
+    const completedCount = this.recordManager.countCompletedTracks(currentLevel, trackCount)
     this.addTextRender(
       this.gameMenuFinished,
-      `${var3} of ${this.levelNames[this.settingStringLevel.getCurrentOptionPos()].length} tracks in ${this.levelDifficultyNames[this.settingStringLevel.getCurrentOptionPos()]} completed.`,
+      `${completedCount} of ${trackCount} tracks in ${this.levelDifficultyNames[currentLevel]} completed.`,
     )
     if (!this.completedLastTrack) {
-      this.restartTrackAction.setText(`Restart: ${this.micro.levelLoader.getName(this.settingStringLevel.getCurrentOptionPos(), this.settingsStringTrack.getCurrentOptionPos())}`)
+      this.restartTrackAction.setText(`Restart: ${this.micro.levelLoader.getName(currentLevel, currentTrack)}`)
       this.nextTrackAction?.setText(`Next: ${this.micro.levelLoader.getName(this.resumeLevelIndex, this.resumeTrackIndex + 1)}`)
     } else {
-      if (this.settingStringLevel.getCurrentOptionPos() < this.settingStringLevel.getMaxOptionPos()) {
-        this.settingStringLevel.setCurrentOptionPos(this.settingStringLevel.getCurrentOptionPos() + 1)
-        this.settingsStringTrack.setCurrentOptionPos(0)
-        this.settingsStringTrack.setAvailableOptions(this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()])
+      let allCompleted = true
+      for (let lvl = 0; lvl < 3; ++lvl) {
+        const lvlCount = this.levelNames[lvl]?.length ?? 0
+        if (this.recordManager.countCompletedTracks(lvl, lvlCount) < lvlCount) {
+          allCompleted = false
+          break
+        }
       }
 
-      if (unlockedLeague !== -1) {
-        this.addTextRender(this.gameMenuFinished, `Congratultions! You have successfully unlocked a new league: ${this.leagueNames[unlockedLeague]}`)
-        if (unlockedLeague === 3) {
-          this.gameMenuFinished.addMenuElement(new TextRender('Enjoy...', this.micro))
-        }
-
-        this.showAlert('League unlocked', `You have successfully unlocked a new league: ${this.leagueNames[unlockedLeague]}`, null)
+      if (allCompleted) {
+        this.addTextRender(this.gameMenuFinished, 'All tracks in this career completed!')
       } else {
-        let var4 = true
-        if (this.micro.levelLoader !== null) {
-          for (let var5 = 0; var5 < 3; ++var5) {
-            if (this.unlockedTracksByLevel[var5] !== this.micro.levelLoader.levelNames[var5].length - 1) {
-              var4 = false
-            }
-          }
-        }
-
-        if (!var4) {
-          this.addTextRender(this.gameMenuFinished, 'You have completed all tracks at this level.')
-        }
+        this.addTextRender(this.gameMenuFinished, 'You have completed all tracks at this level.')
       }
     }
 
@@ -652,6 +647,9 @@ export class MenuManager implements IMenuManager {
   }
 
   private fillCanvasWithImage(graphics: Graphics): void {
+    if (themeManager.isDark()) {
+      return
+    }
     if (this.rasterImage === null || this.rasterImage.getWidth() === 0 || this.rasterImage.getHeight() === 0) {
       return
     }
@@ -736,14 +734,17 @@ export class MenuManager implements IMenuManager {
       this.finishNameAction?.setText(`Name - ${this.makeString(this.playerNameBytes)}`)
     } else if (gm === this.gameMenuPlay) {
       if (this.settingStringLevel !== null && this.settingsStringTrack !== null && this.micro.levelLoader !== null) {
-        this.settingsStringTrack.setOptionsList(this.micro.levelLoader.levelNames[this.settingStringLevel.getCurrentOptionPos()])
+        const levelIndex = this.settingStringLevel.getCurrentOptionPos()
+        this.settingsStringTrack.setOptionsList(this.micro.levelLoader.levelNames[levelIndex])
         if (this.currentGameMenu === this.trackSelectionMenu) {
-          this.selectedTrackByLevel[this.settingStringLevel.getCurrentOptionPos()] = this.settingsStringTrack.getCurrentOptionPos()
+          this.selectedTrackByLevel[levelIndex] = this.settingsStringTrack.getCurrentOptionPos()
         }
 
-        this.settingsStringTrack.setAvailableOptions(this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()])
-        this.settingsStringTrack.setCurrentOptionPos(this.selectedTrackByLevel[this.settingStringLevel.getCurrentOptionPos()])
+        this.settingsStringTrack.setCurrentOptionPos(this.selectedTrackByLevel[levelIndex])
+        this.refreshTrackBadges()
       }
+    } else if (gm === this.gameMenuLevelLoader) {
+      this.rebuildLevelLoaderMenu()
     }
 
     if (gm === this.gameMenuMain || gm === this.gameMenuPlay) {
@@ -853,21 +854,12 @@ export class MenuManager implements IMenuManager {
 
   handleMenuSelection(menuElement: IGameMenuElement): void {
     if (menuElement === this.taskStart) {
-      if (
-        this.settingStringLevel !== null &&
-        this.settingsStringTrack !== null &&
-        this.settingsStringLeague !== null &&
-        this.settingStringLevel.getCurrentOptionPos() <= this.settingStringLevel.getMaxAvailableOptionPos() &&
-        this.settingsStringTrack.getCurrentOptionPos() <= this.settingsStringTrack.getMaxAvailableOptionPos() &&
-        this.settingsStringLeague.getCurrentOptionPos() <= this.settingsStringLeague.getMaxAvailableOptionPos()
-      ) {
+      if (this.settingStringLevel !== null && this.settingsStringTrack !== null && this.settingsStringLeague !== null) {
         this.micro.gamePhysics?.disableGenerateInputAI()
         this.micro.levelLoader?.loadLevel(this.settingStringLevel.getCurrentOptionPos(), this.settingsStringTrack.getCurrentOptionPos())
         this.micro.gamePhysics?.setMotoLeague(this.settingsStringLeague.getCurrentOptionPos())
         this.restartRequested = true
         this.micro.menuToGame()
-      } else {
-        this.showAlert('GWTR', 'Complete more tracks to unlock this track/league combo.', null)
       }
       return
     }
@@ -918,13 +910,43 @@ export class MenuManager implements IMenuManager {
       return
     }
 
+    if (menuElement === this.darkModeSetting) {
+      if (this.darkModeSetting.consumeSelectionMenuRequested()) {
+        this.darkModeSetting.setCurrentOptionPos(this.darkModeSetting.getCurrentOptionPos() + 1)
+      }
+      themeManager.setModeIndex(this.darkModeSetting.getCurrentOptionPos())
+      this.repaint()
+      return
+    }
+
+    if (menuElement === this.loadDiskFileAction) {
+      this.triggerDiskLevelPicker()
+      return
+    }
+
+    if (menuElement === this.reloadDiskFileAction) {
+      void this.reloadDiskLevelFile()
+      return
+    }
+
+    if (menuElement === this.loadOriginalCareerAction) {
+      void this.loadBuiltInLevelPack(LEVELS_MRG_URL, 'Original', '')
+      return
+    }
+
+    if (menuElement === this.loadAltCareerAction) {
+      void this.loadBuiltInLevelPack(ALT_CAREER_MRG_URL, '100% Pro Career', 'alt100_')
+      return
+    }
+
     if (menuElement === this.confirmYes) {
       if (this.currentGameMenu === this.gameMenuConfirmClear) {
-        this.recordManager?.deleteRecordStores()
+        this.recordManager?.deleteRecordStores(false)
+        this.refreshTrackBadges()
         this.showAlert('Cleared', 'Highscores have been cleared', null)
       } else if (this.currentGameMenu === this.gameMenuConfirmReset) {
         this.exit()
-        this.showAlert('Reset', 'Master reset. Application will be closed.', null)
+        this.showAlert('Reset', 'All settings and highscores reset.', null)
       }
 
       this.openMenu(this.currentGameMenu?.getParentMenu() ?? null, false)
@@ -962,10 +984,10 @@ export class MenuManager implements IMenuManager {
     }
 
     if (menuElement === this.restartTrackAction) {
-      if (this.settingsStringLeague !== null && this.settingStringLevel !== null && this.settingsStringTrack !== null && this.settingsStringLeague.getCurrentOptionPos() <= this.settingsStringLeague.getMaxAvailableOptionPos()) {
+      if (this.settingsStringLeague !== null && this.settingStringLevel !== null && this.settingsStringTrack !== null) {
         this.settingStringLevel.setCurrentOptionPos(this.resumeLevelIndex)
-        this.settingsStringTrack.setAvailableOptions(this.unlockedTracksByLevel[this.resumeLevelIndex])
         this.settingsStringTrack.setCurrentOptionPos(this.resumeTrackIndex)
+        this.refreshTrackBadges()
         this.micro.gamePhysics?.setMotoLeague(this.settingsStringLeague.getCurrentOptionPos())
         this.restartRequested = true
         this.micro.menuToGame()
@@ -989,6 +1011,7 @@ export class MenuManager implements IMenuManager {
     }
 
     if (menuElement === this.settingStringContinue) {
+      this.micro.gamePhysics?.disableGenerateInputAI()
       this.repaint()
       this.micro.menuToGame()
       return
@@ -1006,8 +1029,9 @@ export class MenuManager implements IMenuManager {
     }
 
     if (menuElement === this.settingsStringTrack) {
+      const levelIndex = this.settingStringLevel?.getCurrentOptionPos() ?? 0
       if (this.settingsStringTrack.consumeSelectionMenuRequested()) {
-        this.settingsStringTrack.setAvailableOptions(this.unlockedTracksByLevel[this.settingStringLevel?.getCurrentOptionPos() ?? 0])
+        this.refreshTrackBadges()
         this.settingsStringTrack.init()
         this.trackSelectionMenu = this.settingsStringTrack.getCurrentMenu()
         this.openMenu(this.trackSelectionMenu, false)
@@ -1015,7 +1039,7 @@ export class MenuManager implements IMenuManager {
       }
 
       if (this.settingStringLevel !== null) {
-        this.selectedTrackByLevel[this.settingStringLevel.getCurrentOptionPos()] = this.settingsStringTrack.getCurrentOptionPos()
+        this.selectedTrackByLevel[levelIndex] = this.settingsStringTrack.getCurrentOptionPos()
       }
       return
     }
@@ -1028,9 +1052,10 @@ export class MenuManager implements IMenuManager {
       }
 
       if (this.micro.levelLoader !== null && this.settingsStringTrack !== null) {
-        this.settingsStringTrack.setOptionsList(this.micro.levelLoader.levelNames[this.settingStringLevel.getCurrentOptionPos()])
-        this.settingsStringTrack.setAvailableOptions(this.unlockedTracksByLevel[this.settingStringLevel.getCurrentOptionPos()])
-        this.settingsStringTrack.setCurrentOptionPos(this.selectedTrackByLevel[this.settingStringLevel.getCurrentOptionPos()])
+        const levelIndex = this.settingStringLevel.getCurrentOptionPos()
+        this.settingsStringTrack.setOptionsList(this.micro.levelLoader.levelNames[levelIndex])
+        this.settingsStringTrack.setCurrentOptionPos(this.selectedTrackByLevel[levelIndex])
+        this.refreshTrackBadges()
         this.settingsStringTrack.init()
       }
       return
@@ -1082,7 +1107,8 @@ export class MenuManager implements IMenuManager {
   }
 
   getZoom(): number {
-    return (this.zoomSetting?.getCurrentOptionPos() ?? 0) + 1
+    const idx = this.zoomSetting !== null ? this.zoomSetting.getCurrentOptionPos() : this.zoomIndex
+    return Math.max(1, idx + 1)
   }
 
   setFinishTime(var1: number): void {
@@ -1151,38 +1177,230 @@ export class MenuManager implements IMenuManager {
     this.bikeSpriteSetting?.setCurrentOptionPos(0)
     this.lookAheadSetting?.setCurrentOptionPos(0)
     this.zoomSetting?.setCurrentOptionPos(0)
+    themeManager.setModeIndex(0)
+    this.darkModeSetting?.setCurrentOptionPos(0)
     this.settingsStringLeague?.setCurrentOptionPos(0)
-    this.settingsStringLeague?.setAvailableOptions(0)
+    this.settingsStringLeague?.setAvailableOptions(3)
     this.settingStringLevel?.setCurrentOptionPos(0)
-    this.settingStringLevel?.setAvailableOptions(1)
+    this.settingStringLevel?.setAvailableOptions(2)
     this.settingsStringTrack?.setCurrentOptionPos(0)
     this.playerNameBytes[0] = 65
     this.playerNameBytes[1] = 65
     this.playerNameBytes[2] = 65
     this.inputSetting?.setCurrentOptionPos(0)
-    this.unlockedTracksByLevel[0] = 0
-    this.unlockedTracksByLevel[1] = 0
-    this.unlockedTracksByLevel[2] = -1
-    this.availableLeagues = 0
+    this.availableLeagues = 3
+    this.maxAvailableLevel = 2
+    if (this.micro.levelLoader !== null) {
+      for (let i = 0; i < 3; ++i) {
+        this.unlockedTracksByLevel[i] = Math.max(0, this.micro.levelLoader.levelNames[i].length - 1)
+      }
+    }
     this.persistState()
-    this.recordManager?.deleteRecordStores()
+    this.recordManager?.deleteRecordStores(true)
+    this.refreshTrackBadges()
   }
 
-  private getCountOfRecordStoresWithPrefix(prefixNumber: number): number {
-    const storeNames = RecordStore.listRecordStores()
-    if (this.recordManager !== null && storeNames.length !== 0) {
-      let count = 0
+  syncThemeSettingFromManager(): void {
+    this.darkModeSetting?.setCurrentOptionPos(themeManager.getModeIndex())
+  }
 
-      for (let i = 0; i < storeNames.length; ++i) {
-        if (storeNames[i].startsWith(String(prefixNumber))) {
-          ++count
-        }
+  setLevelPackChangedHandler(handler: (() => void) | null): void {
+    this.onLevelPackChanged = handler
+  }
+
+  private getTrackBadgesForLevel(levelIndex: number): TrackBadge[] {
+    const trackCount = this.micro.levelLoader?.getTrackCount(levelIndex) ?? this.levelNames[levelIndex]?.length ?? 0
+    const badges: TrackBadge[] = new Array<TrackBadge>(trackCount)
+    for (let track = 0; track < trackCount; ++track) {
+      const medal = this.recordManager?.getTrackTopMedal(levelIndex, track) ?? null
+      badges[track] = medal === 0 ? 'gold' : medal === 1 ? 'silver' : medal === 2 ? 'bronze' : 'incomplete'
+    }
+    return badges
+  }
+
+  private refreshTrackBadges(): void {
+    if (this.settingsStringTrack === null || this.settingStringLevel === null) {
+      return
+    }
+    const levelIndex = this.settingStringLevel.getCurrentOptionPos()
+    const trackCount = this.micro.levelLoader?.getTrackCount(levelIndex) ?? this.levelNames[levelIndex]?.length ?? 0
+    this.settingsStringTrack.setAvailableOptions(Math.max(0, trackCount - 1))
+    this.settingsStringTrack.setTrackBadges(this.getTrackBadgesForLevel(levelIndex))
+  }
+
+  private rebuildLevelLoaderMenu(): void {
+    if (this.gameMenuLevelLoader === null || this.settingStringBack === null) {
+      return
+    }
+    this.gameMenuLevelLoader.clearVector()
+    this.gameMenuLevelLoader.addMenuElement(new TextRender(`Active: ${this.activePackLabel}`, this.micro))
+    if (this.loadDiskFileAction !== null) {
+      this.gameMenuLevelLoader.addMenuElement(this.loadDiskFileAction)
+    }
+    if (this.loadedFileHandle !== null && this.reloadDiskFileAction !== null) {
+      this.reloadDiskFileAction.setText(`Reload: ${this.loadedFileHandle.name}>`)
+      this.gameMenuLevelLoader.addMenuElement(this.reloadDiskFileAction)
+    }
+    if (this.loadOriginalCareerAction !== null) {
+      this.gameMenuLevelLoader.addMenuElement(this.loadOriginalCareerAction)
+    }
+    if (this.loadAltCareerAction !== null) {
+      this.gameMenuLevelLoader.addMenuElement(this.loadAltCareerAction)
+    }
+    this.gameMenuLevelLoader.addMenuElement(this.settingStringBack)
+  }
+
+  private triggerDiskLevelPicker(): void {
+    const pickerWindow = window as Window & { showOpenFilePicker?: OpenFilePickerFn }
+    if (typeof pickerWindow.showOpenFilePicker === 'function') {
+      void this.pickFileWithFsApi(pickerWindow.showOpenFilePicker)
+      return
+    }
+    this.openFallbackFileInput()
+  }
+
+  private async pickFileWithFsApi(showOpenFilePicker: OpenFilePickerFn): Promise<void> {
+    try {
+      const [handle] = await showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: 'Gravity Defied Level Pack (.mrg)',
+            accept: { 'application/octet-stream': ['.mrg'] },
+          },
+        ],
+      })
+      if (handle === undefined) {
+        return
       }
+      const file = await handle.getFile()
+      const buffer = await file.arrayBuffer()
+      this.applyLoadedLevelPack(buffer, file.name, `custom_${this.hashString(file.name)}_`, handle)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      this.showAlert('Load failed', message, null)
+      this.repaint()
+    }
+  }
 
-      return count
+  private openFallbackFileInput(): void {
+    if (this.fileInputElement === null) {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.mrg,application/octet-stream'
+      input.style.display = 'none'
+      input.addEventListener('change', () => {
+        const file = input.files?.[0]
+        if (file === undefined) {
+          return
+        }
+        void file.arrayBuffer().then((buffer) => {
+          this.applyLoadedLevelPack(buffer, file.name, `custom_${this.hashString(file.name)}_`, null)
+        })
+      })
+      document.body.append(input)
+      this.fileInputElement = input
+    }
+    this.fileInputElement.value = ''
+    this.fileInputElement.click()
+  }
+
+  private async reloadDiskLevelFile(): Promise<void> {
+    if (this.loadedFileHandle === null) {
+      this.openFallbackFileInput()
+      return
+    }
+    try {
+      const file = await this.loadedFileHandle.getFile()
+      const buffer = await file.arrayBuffer()
+      this.applyLoadedLevelPack(buffer, file.name, `custom_${this.hashString(file.name)}_`, this.loadedFileHandle)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.showAlert('Reload failed', message, null)
+      this.repaint()
+    }
+  }
+
+  private async loadBuiltInLevelPack(url: string, label: string, packPrefix: string): Promise<void> {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const buffer = await response.arrayBuffer()
+      this.applyLoadedLevelPack(buffer, label, packPrefix, null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.showAlert('Load failed', message, null)
+      this.repaint()
+    }
+  }
+
+  private applyLoadedLevelPack(
+    buffer: ArrayBuffer,
+    label: string,
+    packPrefix: string,
+    fileHandle: FileSystemFileHandle | null,
+  ): void {
+    if (this.micro.levelLoader === null) {
+      return
     }
 
-    return 0
+    try {
+      this.micro.levelLoader.loadFromBuffer(buffer)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.showAlert('Invalid .mrg', message, null)
+      this.repaint()
+      return
+    }
+
+    this.recordManager?.setPackPrefix(packPrefix)
+    this.activePackLabel = label
+    this.loadedFileHandle = fileHandle
+    this.levelNames = this.micro.levelLoader.levelNames
+    for (let i = 0; i < 3; ++i) {
+      this.selectedTrackByLevel[i] = 0
+      this.unlockedTracksByLevel[i] = Math.max(0, this.levelNames[i].length - 1)
+    }
+    this.selectedLevelIndex = 0
+    this.selectedTrackIndex = 0
+    this.resumeLevelIndex = 0
+    this.resumeTrackIndex = 0
+
+    this.settingStringLevel?.setCurrentOptionPos(0)
+    this.settingStringLevel?.setAvailableOptions(2)
+    if (this.settingsStringTrack !== null && this.levelNames[0] !== undefined) {
+      this.settingsStringTrack.setOptionsList(this.levelNames[0])
+      this.settingsStringTrack.setCurrentOptionPos(0)
+      this.refreshTrackBadges()
+    }
+    this.restartTrackAction?.setText(`Restart: ${this.micro.levelLoader.getName(0, 0)}`)
+    this.nextTrackAction?.setText(`Next: ${this.micro.levelLoader.getName(0, 1)}`)
+
+    this.onLevelPackChanged?.()
+    if (this.micro.gamePhysics !== null) {
+      this.micro.gamePhysics.resetSmth(true)
+      this.micro.gamePhysics.enableGenerateInputAI()
+      this.micro.gamePhysics.syncRenderStateFromSimulation()
+    }
+
+    this.rebuildLevelLoaderMenu()
+    this.persistState()
+    this.showAlert(`Loaded: ${label}`, `Loaded level pack: ${label}`, null)
+    this.repaint()
+  }
+
+  private hashString(value: string): string {
+    let hash = 0x811c9dc5
+    for (let i = 0; i < value.length; ++i) {
+      hash ^= value.charCodeAt(i)
+      hash = Math.imul(hash, 0x01000193)
+    }
+    return (hash >>> 0).toString(16)
   }
 
   private makeString(value: Uint8Array): string {

@@ -3,6 +3,7 @@ import { GamePhysics } from './GamePhysics.ts'
 import { LevelLoader } from './LevelLoader.ts'
 import { MenuManager } from './MenuManager.ts'
 import { Micro } from './Micro.ts'
+import { themeManager } from './ThemeManager.ts'
 import { TouchControls } from './TouchControls.ts'
 import LEVELS_MRG_URL from './assets/levels.mrg?url'
 
@@ -35,8 +36,31 @@ export async function startGravityDefiedApp(root: HTMLDivElement): Promise<void>
   micro.gamePhysics = gamePhysics
   micro.gameCanvas = gameCanvas
   micro.menuManager = menuManager
+  function resize(): void {
+    const rect = root.getBoundingClientRect()
+    let width = Math.floor(rect.width)
+    let height = Math.floor(rect.height)
+
+    if (width <= 0 || height <= 0) {
+      width = window.innerWidth
+      height = window.innerHeight
+    }
+
+    if (window.visualViewport !== null) {
+      width = Math.max(width, Math.floor(window.visualViewport.width))
+      height = Math.max(height, Math.floor(window.visualViewport.height))
+    }
+
+    gameCanvas.resize(width, height, menuManager.getZoom())
+    gamePhysics.setMinimalScreenWH(Math.min(gameCanvas.getWidth(), gameCanvas.getHeight()))
+  }
+
   gameCanvas.init(gamePhysics)
-  for (let i = 1; i <= 7; ++i) {
+  for (let i = 1; i <= 3; ++i) {
+    menuManager.initPart(i)
+  }
+  resize()
+  for (let i = 4; i <= 7; ++i) {
     menuManager.initPart(i)
   }
   gameCanvas.setMenuManager(menuManager)
@@ -67,25 +91,6 @@ export async function startGravityDefiedApp(root: HTMLDivElement): Promise<void>
     },
   })
 
-  function resize(): void {
-    const rect = root.getBoundingClientRect()
-    let width = Math.floor(rect.width)
-    let height = Math.floor(rect.height)
-
-    if (width <= 0 || height <= 0) {
-      width = window.innerWidth
-      height = window.innerHeight
-    }
-
-    if (window.visualViewport !== null) {
-      width = Math.max(width, Math.floor(window.visualViewport.width))
-      height = Math.max(height, Math.floor(window.visualViewport.height))
-    }
-
-    gameCanvas.resize(width, height, menuManager.getZoom())
-    gamePhysics.setMinimalScreenWH(Math.min(gameCanvas.getWidth(), gameCanvas.getHeight()))
-  }
-
   function render(): void {
     gameCanvas.paint(gameCanvas.getGraphics())
     touchControls.update(Micro.isInGameMenu, isBackAvailable())
@@ -115,6 +120,13 @@ export async function startGravityDefiedApp(root: HTMLDivElement): Promise<void>
   }
 
   gameCanvas.setRepaintHandler(render)
+  menuManager.setLevelPackChangedHandler(() => {
+    restart(false)
+  })
+  themeManager.subscribe(() => {
+    menuManager.syncThemeSettingFromManager()
+    render()
+  })
 
   function restart(var1: boolean): void {
     gamePhysics.resetSmth(true)

@@ -1,6 +1,7 @@
 import { MathF16 } from './MathF16.ts'
 import type { MenuManager } from './MenuManager.ts'
 import { Micro } from './Micro.ts'
+import { themeManager } from './ThemeManager.ts'
 import { Timer } from './Timer.ts'
 import { toInt } from './cpp.ts'
 import type { GamePhysics } from './GamePhysics.ts'
@@ -371,15 +372,15 @@ export class GameCanvas {
       this.time10MsToStringCache[time10MsPart] = `${zeroPadding}${time10Ms % 100}`
     }
 
-    this.setColor(0, 0, 0)
+    this.setForegroundColor()
     this.graphics.setFont(FontStorage.getFont(Font.STYLE_BOLD, Font.SIZE_MEDIUM))
 
     if (time10Ms > 3600000) {
-      this.graphics.drawString('0:00.', this.width - GameCanvas.defaultFontWidth00, this.height2 - 5, Graphics.RIGHT | Graphics.TOP)
-      this.graphics.drawString('00', this.width - GameCanvas.defaultFontWidth00, this.height2 - 5, Graphics.LEFT | Graphics.TOP)
+      this.graphics.drawString('0:00.', this.width - GameCanvas.defaultFontWidth00, this.height2 - 6, Graphics.RIGHT | Graphics.BOTTOM)
+      this.graphics.drawString('00', this.width - GameCanvas.defaultFontWidth00, this.height2 - 6, Graphics.LEFT | Graphics.BOTTOM)
     } else {
-      this.graphics.drawString(GameCanvas.stringWithTime, this.width - GameCanvas.defaultFontWidth00, this.height2 - 5, Graphics.RIGHT | Graphics.TOP)
-      this.graphics.drawString(this.time10MsToStringCache[time10MsPart], this.width - GameCanvas.defaultFontWidth00, this.height2 - 5, Graphics.LEFT | Graphics.TOP)
+      this.graphics.drawString(GameCanvas.stringWithTime, this.width - GameCanvas.defaultFontWidth00, this.height2 - 6, Graphics.RIGHT | Graphics.BOTTOM)
+      this.graphics.drawString(this.time10MsToStringCache[time10MsPart], this.width - GameCanvas.defaultFontWidth00, this.height2 - 6, Graphics.LEFT | Graphics.BOTTOM)
     }
   }
 
@@ -401,7 +402,7 @@ export class GameCanvas {
       GameCanvas.flagAnimationTime = 0
     }
 
-    this.setColor(0, 0, 0)
+    this.setForegroundColor()
     this.drawLine(x, y, x, y + 32)
     this.drawSprite(this.graphics, this.startFlagAnimationTimeToSpriteNo[GameCanvas.flagAnimationTime >> 16], this.addDx(x), this.addDy(y) - 32)
   }
@@ -411,7 +412,7 @@ export class GameCanvas {
       GameCanvas.flagAnimationTime = 0
     }
 
-    this.setColor(0, 0, 0)
+    this.setForegroundColor()
     this.drawLine(x, y, x, y + 32)
     this.drawSprite(this.graphics, this.finishFlagAnumationTimeToSpriteNo[GameCanvas.flagAnimationTime >> 16], this.addDx(x), this.addDy(y) - 32)
   }
@@ -474,24 +475,37 @@ export class GameCanvas {
     this.graphics.setClip(0, 0, this.width, this.getHeight())
   }
 
+  private setForegroundColor(): void {
+    if (themeManager.isDark()) {
+      this.setColor(235, 240, 246)
+    } else {
+      this.setColor(0, 0, 0)
+    }
+  }
+
+  private setBackgroundColor(g: Graphics = this.graphics): void {
+    if (themeManager.isDark()) {
+      g.setColor(18, 21, 26)
+    } else {
+      g.setColor(255, 255, 255)
+    }
+  }
+
   clearScreenWithWhite(): void {
-    this.graphics.setColor(255, 255, 255)
+    this.setBackgroundColor(this.graphics)
     this.graphics.fillRect(0, 0, this.width, this.height2)
   }
 
   setColor(red: number, green: number, blue: number): void {
     if (Micro.isInGameMenu) {
-      red += 128
-      green += 128
-      blue += 128
-      if (red > 240) {
-        red = 240
-      }
-      if (green > 240) {
-        green = 240
-      }
-      if (blue > 240) {
-        blue = 240
+      if (themeManager.isDark()) {
+        red = Math.max(0, Math.min(255, Math.round(18 + (red - 18) * 0.35)))
+        green = Math.max(0, Math.min(255, Math.round(21 + (green - 21) * 0.35)))
+        blue = Math.max(0, Math.min(255, Math.round(26 + (blue - 26) * 0.35)))
+      } else {
+        red = Math.min(240, red + 128)
+        green = Math.min(240, green + 128)
+        blue = Math.min(240, blue + 128)
       }
     }
 
@@ -500,9 +514,17 @@ export class GameCanvas {
 
   drawProgressBar(var1: number, mode: boolean): void {
     const h = mode ? this.height : this.height2
-    this.setColor(0, 0, 0)
+    if (themeManager.isDark()) {
+      this.setColor(205, 215, 225)
+    } else {
+      this.setColor(0, 0, 0)
+    }
     this.graphics.fillRect(1, h - 4, this.width - 2, 3)
-    this.setColor(255, 255, 255)
+    if (themeManager.isDark()) {
+      this.setColor(18, 21, 26)
+    } else {
+      this.setColor(255, 255, 255)
+    }
     this.graphics.fillRect(2, h - 3, toInt((BigInt((this.width - 4) << 16) * BigInt(var1)) >> 16n) >> 16, 1)
   }
 
@@ -511,7 +533,7 @@ export class GameCanvas {
       return
     }
 
-    this.setColor(0, 0, 0)
+    this.setForegroundColor()
     this.graphics.setFont(this.screenFont)
     if (this.height2 <= 128) {
       this.graphics.drawString(this.timerMessage, Math.trunc(this.width / 2), 1, Graphics.HCENTER | Graphics.TOP)
@@ -535,7 +557,7 @@ export class GameCanvas {
     }
 
     if (this.loadingScreenMode !== 0) {
-      g.setColor(255, 255, 255)
+      this.setBackgroundColor(g)
       g.fillRect(0, 0, this.getWidth(), this.getHeight())
       if (this.loadingScreenMode === 1) {
         if (this.logoImage !== null) {

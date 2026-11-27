@@ -2,6 +2,7 @@ import { INT_MAX, INT_MIN, abs, divideF16, multiplyF16 } from './cpp.ts'
 import { GameCanvas } from './GameCanvas.ts'
 import { GameLevel } from './GameLevel.ts'
 import { GamePhysics } from './GamePhysics.ts'
+import { themeManager } from './ThemeManager.ts'
 import { TimerOrMotoPartOrMenuElem } from './TimerOrMotoPartOrMenuElem.ts'
 import { FileStream } from './utils/FileStream.ts'
 
@@ -23,7 +24,7 @@ export class LevelLoader {
   private static visibleEndPointIndex = 0
   private static visibleStartPointX = 0
   private static visibleEndPointX = 0
-  private readonly levelFileStream: FileStream
+  private levelFileStream: FileStream
 
   gameLevel: GameLevel | null = null
   currentLeagueIndex = 0
@@ -54,36 +55,115 @@ export class LevelLoader {
   }
 
   private loadLevels(): void {
-    const var4 = [0, 0, 0]
+    const { offsets, names } = this.parseTrackDirectory(this.levelFileStream)
+    LevelLoader.levelOffsetInFile = offsets
+    this.levelNames = names
+  }
+
+  private parseTrackDirectory(stream: FileStream): { offsets: number[][]; names: string[][] } {
+    stream.setPos(0)
+    const offsets: number[][] = [[], [], []]
+    const names: string[][] = [[], [], []]
     const decoder = new TextDecoder('ascii')
 
     for (let league = 0; league < 3; ++league) {
-      var4[league] = this.levelFileStream.readInt32(true)
-      LevelLoader.levelOffsetInFile[league] = new Array<number>(var4[league])
-      this.levelNames[league] = new Array<string>(var4[league])
+      const trackCount = stream.readInt32(true)
+      if (!Number.isInteger(trackCount) || trackCount < 1 || trackCount > 10000) {
+        throw new Error(`Invalid MRG file: level ${league + 1} has invalid track count (${trackCount})`)
+      }
 
-      for (let levelNo = 0; levelNo < var4[league]; ++levelNo) {
-        const var7 = this.levelFileStream.readInt32(true)
-        LevelLoader.levelOffsetInFile[league][levelNo] = var7
+      offsets[league] = new Array<number>(trackCount)
+      names[league] = new Array<string>(trackCount)
+
+      for (let levelNo = 0; levelNo < trackCount; ++levelNo) {
+        const offset = stream.readInt32(true)
+        offsets[league][levelNo] = offset
 
         const raw = new Uint8Array(40)
         let zeroIndex = 40
         for (let var8 = 0; var8 < 40; ++var8) {
-          raw[var8] = this.levelFileStream.readInt8()
+          raw[var8] = stream.readInt8()
           if (raw[var8] === 0) {
             zeroIndex = var8
             break
           }
         }
 
-        const s = decoder.decode(raw.slice(0, zeroIndex)).replaceAll('_', ' ')
-        this.levelNames[league][levelNo] = s
+        names[league][levelNo] = decoder.decode(raw.slice(0, zeroIndex)).replaceAll('_', ' ')
       }
     }
+
+    return { offsets, names }
+  }
+
+  /**
+   * Validates and hot-swaps the active level pack from an in-memory .mrg buffer.
+   */
+  loadFromBuffer(buffer: ArrayBuffer): void {
+    if (buffer.byteLength === 0) {
+      throw new Error('Invalid MRG file: buffer is empty')
+    }
+
+    const tempStream = new FileStream(buffer)
+    let offsets: number[][]
+    let names: string[][]
+
+    try {
+      const parsed = this.parseTrackDirectory(tempStream)
+      offsets = parsed.offsets
+      names = parsed.names
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Invalid MRG header: ${message}`)
+    }
+
+    const tempLevel = new GameLevel()
+    for (let league = 0; league < 3; ++league) {
+      if (offsets[league].length < 1) {
+        throw new Error(`Invalid MRG file: level ${league + 1} has no tracks`)
+      }
+
+      for (let trackNo = 0; trackNo < offsets[league].length; ++trackNo) {
+        const offset = offsets[league][trackNo]
+        if (offset < 0 || offset >= buffer.byteLength) {
+          throw new Error(`Invalid MRG file: track (${league}, ${trackNo}) offset ${offset} is out of bounds`)
+        }
+
+        try {
+          tempStream.setPos(offset)
+          tempLevel.load(tempStream)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          throw new Error(`Invalid MRG file: failed to load track "${names[league][trackNo]}" (${league}, ${trackNo}): ${message}`)
+        }
+
+        if (tempLevel.pointsCount < 2) {
+          throw new Error(`Invalid MRG file: track "${names[league][trackNo]}" (${league}, ${trackNo}) has fewer than 2 valid points`)
+        }
+
+        for (let i = 0; i < tempLevel.pointsCount; ++i) {
+          const x = tempLevel.pointPositions[i][0]
+          if (!Number.isFinite(x) || (i > 0 && x <= tempLevel.pointPositions[i - 1][0])) {
+            throw new Error(`Invalid MRG file: track "${names[league][trackNo]}" (${league}, ${trackNo}) has invalid point X coordinates`)
+          }
+        }
+      }
+    }
+
+    this.levelFileStream = tempStream
+    LevelLoader.levelOffsetInFile = offsets
+    this.levelNames = names
+    this.currentLeagueIndex = 0
+    this.currentTrackIndex = -1
+    this.loadNextLevel()
+  }
+
+  getTrackCount(level: number): number {
+    return level >= 0 && level < this.levelNames.length ? this.levelNames[level].length : 0
   }
 
   getName(league: number, level: number): string {
-    return league < 3 && level < this.levelNames[league].length ? this.levelNames[league][level] : '---'
+    return league >= 0 && league < 3 && level >= 0 && level < this.levelNames[league].length ? this.levelNames[league][level] : '---'
   }
 
   loadNextLevel(): void {
@@ -204,7 +284,11 @@ export class LevelLoader {
       return
     }
 
-    gameCanvas.setColor(0, 170, 0)
+    if (themeManager.isDark()) {
+      gameCanvas.setColor(40, 185, 95)
+    } else {
+      gameCanvas.setColor(0, 170, 0)
+    }
     xF16 >>= 1
     yF16 >>= 1
     this.gameLevel.renderLevel3D(gameCanvas, xF16, yF16)
@@ -215,7 +299,11 @@ export class LevelLoader {
       return
     }
 
-    canvas.setColor(0, 255, 0)
+    if (themeManager.isDark()) {
+      canvas.setColor(75, 240, 125)
+    } else {
+      canvas.setColor(0, 255, 0)
+    }
     this.gameLevel.renderTrackNearestGreenLine(canvas)
   }
 
@@ -232,17 +320,25 @@ export class LevelLoader {
     LevelLoader.visibleStartPointIndex = LevelLoader.visibleStartPointIndex < 0 ? 0 : LevelLoader.visibleStartPointIndex
 
     if (var2 > LevelLoader.visibleEndPointX) {
-      while (LevelLoader.visibleEndPointIndex < this.gameLevel.pointsCount - 1 && var2 > this.gameLevel.pointPositions[++LevelLoader.visibleEndPointIndex][0]) {}
+      while (LevelLoader.visibleEndPointIndex < this.gameLevel.pointsCount - 1 && var2 > this.gameLevel.pointPositions[++LevelLoader.visibleEndPointIndex][0]) {
+        /* advance visible end index */
+      }
     } else if (var1 < LevelLoader.visibleStartPointX) {
-      while (LevelLoader.visibleStartPointIndex > 0 && var1 < this.gameLevel.pointPositions[--LevelLoader.visibleStartPointIndex][0]) {}
+      while (LevelLoader.visibleStartPointIndex > 0 && var1 < this.gameLevel.pointPositions[--LevelLoader.visibleStartPointIndex][0]) {
+        /* rewind visible start index */
+      }
     } else {
-      while (LevelLoader.visibleStartPointIndex < this.gameLevel.pointsCount && var1 > this.gameLevel.pointPositions[++LevelLoader.visibleStartPointIndex][0]) {}
+      while (LevelLoader.visibleStartPointIndex < this.gameLevel.pointsCount && var1 > this.gameLevel.pointPositions[++LevelLoader.visibleStartPointIndex][0]) {
+        /* advance visible start index */
+      }
 
       if (LevelLoader.visibleStartPointIndex > 0) {
         --LevelLoader.visibleStartPointIndex
       }
 
-      while (LevelLoader.visibleEndPointIndex > 0 && var2 < this.gameLevel.pointPositions[--LevelLoader.visibleEndPointIndex][0]) {}
+      while (LevelLoader.visibleEndPointIndex > 0 && var2 < this.gameLevel.pointPositions[--LevelLoader.visibleEndPointIndex][0]) {
+        /* rewind visible end index */
+      }
 
       LevelLoader.visibleEndPointIndex =
         LevelLoader.visibleEndPointIndex + 1 < this.gameLevel.pointsCount - 1 ? LevelLoader.visibleEndPointIndex + 1 : this.gameLevel.pointsCount - 1
@@ -270,9 +366,9 @@ export class LevelLoader {
     let var21 = 0
 
     for (let var22 = LevelLoader.visibleStartPointIndex; var22 < LevelLoader.visibleEndPointIndex; ++var22) {
-      let var4 = this.gameLevel.pointPositions[var22][0]
-      let var5 = this.gameLevel.pointPositions[var22][1]
-      let var6 = this.gameLevel.pointPositions[var22 + 1][0]
+      const var4 = this.gameLevel.pointPositions[var22][0]
+      const var5 = this.gameLevel.pointPositions[var22][1]
+      const var6 = this.gameLevel.pointPositions[var22 + 1][0]
       const var7 = this.gameLevel.pointPositions[var22 + 1][1]
 
       if (var18 - this.outerCollisionRadiusSqByShape[var2] <= var6 && var18 + this.outerCollisionRadiusSqByShape[var2] >= var4) {

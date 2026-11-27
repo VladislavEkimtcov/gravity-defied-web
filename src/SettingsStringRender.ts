@@ -6,6 +6,8 @@ import type { Micro } from './Micro.ts'
 import { Graphics } from './lcdui/Graphics.ts'
 import { GameMenu as GameMenuClass } from './GameMenu.ts'
 
+export type TrackBadge = 'none' | 'incomplete' | 'gold' | 'silver' | 'bronze'
+
 export class SettingsStringRender implements IGameMenuElement, IMenuManager {
   private optionsList: string[] = []
   private currentOptionPos = 0
@@ -21,6 +23,8 @@ export class SettingsStringRender implements IGameMenuElement, IMenuManager {
   private settingsStringRenders: SettingsStringRender[] = []
   private hasSprite = false
   private isDrawSprite8 = false
+  private trackBadge: TrackBadge = 'none'
+  private trackBadges: TrackBadge[] = []
   private readonly useColon: boolean
 
   constructor(text: string, isDisabled: number, menuManager: IMenuManager, optionsList: string[], isToggleSetting: boolean, micro: Micro, parentGameMenu: GameMenu | null, useColon: boolean) {
@@ -54,14 +58,27 @@ export class SettingsStringRender implements IGameMenuElement, IMenuManager {
     this.isDrawSprite8 = isDrawSprite8
   }
 
+  setTrackBadge(badge: TrackBadge): void {
+    this.trackBadge = badge
+  }
+
+  setTrackBadges(badges: TrackBadge[]): void {
+    this.trackBadges = badges.slice()
+    for (let i = 0; i < this.settingsStringRenders.length; ++i) {
+      this.settingsStringRenders[i].setTrackBadge(i < badges.length ? badges[i] : 'none')
+    }
+  }
+
   setOptionsList(var1: string[]): void {
-    this.optionsList = var1
+    this.optionsList = var1.length === 0 ? [''] : var1
     if (this.currentOptionPos > this.optionsList.length - 1) {
       this.currentOptionPos = this.optionsList.length - 1
     }
-    if (this.maxAvailableOption > this.optionsList.length - 1) {
-      this.maxAvailableOption = this.optionsList.length - 1
+    if (this.currentOptionPos < 0) {
+      this.currentOptionPos = 0
     }
+    this.maxAvailableOption = this.optionsList.length - 1
+    this.trackBadges = []
     this.selectCurrentOptionName()
     this.init()
   }
@@ -73,6 +90,9 @@ export class SettingsStringRender implements IGameMenuElement, IMenuManager {
       this.settingsStringRenders[var1] = new SettingsStringRender(this.optionsList[var1], 0, this, [], false, this.micro, this.parentGameMenu, true)
       if (var1 > this.maxAvailableOption) {
         this.settingsStringRenders[var1].setFlags(true, true)
+      }
+      if (var1 < this.trackBadges.length) {
+        this.settingsStringRenders[var1].setTrackBadge(this.trackBadges[var1])
       }
       this.currentGameMenu.addMenuElement(this.settingsStringRenders[var1])
     }
@@ -153,20 +173,57 @@ export class SettingsStringRender implements IGameMenuElement, IMenuManager {
     this.selectedOptionName = this.optionsList[this.currentOptionPos]
   }
 
+  private renderTrackBadge(graphics: Graphics, badge: TrackBadge, x: number, y: number, slotWidth: number): void {
+    if (badge === 'incomplete') {
+      graphics.drawString('?', x + Math.trunc(slotWidth / 2), y, Graphics.HCENTER | Graphics.TOP)
+      return
+    }
+
+    if (this.micro.gameCanvas === null) {
+      return
+    }
+
+    const spriteNo = badge === 'gold' ? 5 : badge === 'silver' ? 6 : badge === 'bronze' ? 7 : -1
+    if (spriteNo === -1) {
+      return
+    }
+
+    const drawX = x + Math.trunc((slotWidth - GameCanvas.spriteSizeX[spriteNo]) / 2)
+    const drawY = y - Math.trunc(GameCanvas.spriteSizeY[spriteNo] / 2) + Math.trunc(graphics.getFont().getHeight() / 2)
+    this.micro.gameCanvas.drawSprite(graphics, spriteNo, drawX, drawY)
+  }
+
   render(graphics: Graphics, y: number, x: number): void {
     if (this.useColon) {
-      if (!this.hasSprite) {
+      if (this.trackBadge !== 'none') {
+        const iconColWidth = Math.max(GameCanvas.spriteSizeX[5], 7) + 3
+        this.renderTrackBadge(graphics, this.trackBadge, x, y, iconColWidth - 3)
+        graphics.drawString(this.text, x + iconColWidth, y, Graphics.LEFT | Graphics.TOP)
+      } else if (!this.hasSprite) {
         graphics.drawString(this.text, x, y, Graphics.LEFT | Graphics.TOP)
       } else if (this.micro.gameCanvas !== null) {
         graphics.drawString(this.text, x + GameCanvas.spriteSizeX[8] + 3, y, Graphics.LEFT | Graphics.TOP)
-        this.micro.gameCanvas.drawSprite(graphics, this.isDrawSprite8 ? 8 : 9, x, y - Math.trunc(GameCanvas.spriteSizeY[this.isDrawSprite8 ? 8 : 9] / 2) + Math.trunc(graphics.getFont().getHeight() / 2))
+        this.micro.gameCanvas.drawSprite(
+          graphics,
+          this.isDrawSprite8 ? 8 : 9,
+          x,
+          y - Math.trunc(GameCanvas.spriteSizeY[this.isDrawSprite8 ? 8 : 9] / 2) + Math.trunc(graphics.getFont().getHeight() / 2),
+        )
       }
       return
     }
 
     graphics.drawString(this.text, x, y, Graphics.LEFT | Graphics.TOP)
     let shiftedX = x + graphics.getFont().stringWidth(this.text)
-    if (this.currentOptionPos > this.maxAvailableOption && !this.isToggleSetting && this.micro.gameCanvas !== null) {
+    const activeBadge =
+      !this.isToggleSetting && this.currentOptionPos >= 0 && this.currentOptionPos < this.trackBadges.length
+        ? this.trackBadges[this.currentOptionPos]
+        : 'none'
+    if (activeBadge !== 'none') {
+      const slotWidth = Math.max(GameCanvas.spriteSizeX[5], 7)
+      this.renderTrackBadge(graphics, activeBadge, shiftedX + 2, y, slotWidth)
+      shiftedX += slotWidth + 2
+    } else if (this.currentOptionPos > this.maxAvailableOption && !this.isToggleSetting && this.micro.gameCanvas !== null) {
       this.micro.gameCanvas.drawSprite(graphics, 8, shiftedX + 1, y - Math.trunc(GameCanvas.spriteSizeY[8] / 2) + Math.trunc(graphics.getFont().getHeight() / 2))
       shiftedX += GameCanvas.spriteSizeX[9] + 1
     }
